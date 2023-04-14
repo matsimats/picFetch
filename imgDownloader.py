@@ -1,10 +1,12 @@
-
 from flask import Flask, request, jsonify
 from bs4 import *
 import requests
 import os
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
+
 def folder_create(images, folder_name):
     try:
         os.mkdir(folder_name)
@@ -12,6 +14,7 @@ def folder_create(images, folder_name):
         print("Folder Exist with that name!")
         folder_create()
     download_images(images, folder_name)
+
 def download_images(images, folder_name):
     count = 0
     print(f"Total {len(images)} Image Found!")
