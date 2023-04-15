@@ -1,22 +1,22 @@
-from flask import Flask, request, jsonify
-from bs4 import *
+from flask import Flask, request, jsonify, send_file
+from bs4 import BeautifulSoup
 import requests
 import os
-from flask_cors import CORS
+import zipfile
+import io
 
 app = Flask(__name__)
-CORS(app)
 
 def folder_create(images, folder_name):
     try:
         os.mkdir(folder_name)
     except:
         print("Folder Exist with that name!")
-        folder_create()
-    download_images(images, folder_name)
+    return download_images(images, folder_name)
 
 def download_images(images, folder_name):
     count = 0
+    downloaded_images = []
     print(f"Total {len(images)} Image Found!")
     if len(images) != 0:
         for i, image in enumerate(images):
@@ -38,15 +38,22 @@ def download_images(images, folder_name):
                 try:
                     r = str(r, 'utf-8')
                 except UnicodeDecodeError:
-                    with open(f"{folder_name}/images{i+1}.jpg", "wb+") as f:
+                    image_name = f"images{i+1}.jpg"
+                    with open(f"{folder_name}/{image_name}", "wb+") as f:
                         f.write(r)
+                    downloaded_images.append(image_name)
                     count += 1
             except:
                 pass
-        if count == len(images):
-            print("All Images Downloaded!")
-        else:
-            print(f"Total {count} Images Downloaded Out of {len(images)}")
+    return downloaded_images, count
+
+def create_zip_file(images, folder_name):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode='w') as zipf:
+        for i, image in enumerate(images):
+            if image.endswith('.jpg'):
+                zipf.write(os.path.join(folder_name, image), arcname=f'image_{i+1}.jpg')
+    return buffer
 
 @app.route('/download-images', methods=['POST'])
 def download_images_route():
@@ -56,8 +63,18 @@ def download_images_route():
         r = requests.get(url)
         soup = BeautifulSoup(r.text, 'html.parser')
         images = soup.findAll('img')
-        folder_create(images, folder_name)
-        return jsonify({'message': 'Images downloaded successfully!'})
+        downloaded_images, count = folder_create(images, folder_name)
+        
+        # create zip file and add images to it
+        buffer = create_zip_file(downloaded_images, folder_name)
+        
+        # check if zip file size is less than 250 MB
+        if buffer.tell() > 250 * 1024 * 1024:
+            return jsonify({'message': 'Zip file size limit exceeded!'}), 400
+        
+        # send zip file to client for download
+        buffer.seek(0)
+        return send_file(buffer, as_attachment=True, attachment_filename=f'{folder_name}.zip')
     else:
         return jsonify({'message': 'Invalid URL!'}), 400
 
