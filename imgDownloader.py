@@ -55,18 +55,24 @@ def create_zip_file(images, folder_name):
                 zipf.write(os.path.join(folder_name, image), arcname=f'image_{i+1}.jpg')
     return buffer
 
-@app.route('/download-images', methods=['POST'])
-def download_images_route():
+
+@app.route('/image-details', methods=['POST'])
+def image_details_route():
     url = request.form.get('url')
-    folder_name = request.form.get('folder_name', 'images')
     if url:
         r = requests.get(url)
         soup = BeautifulSoup(r.text, 'html.parser')
         images = soup.findAll('img')
-        downloaded_images, count = folder_create(images, folder_name)
-        
-        # create zip file and add images to it
-        buffer = create_zip_file(downloaded_images, folder_name)
+        downloaded_images, count = folder_create(images, 'images')
+        return jsonify({'count': count, 'images': downloaded_images})
+    else:
+        return jsonify({'message': 'Invalid URL!'}), 400
+
+@app.route('/download-images', methods=['POST'])
+def download_images_route():
+    images = request.form.getlist('images[]')
+    if images:
+        buffer = create_zip_file(images, 'images')
         
         # check if zip file size is less than 250 MB
         if buffer.tell() > 250 * 1024 * 1024:
@@ -74,9 +80,12 @@ def download_images_route():
         
         # send zip file to client for download
         buffer.seek(0)
-        return send_file(buffer, as_attachment=True, attachment_filename=f'{folder_name}.zip')
+        return send_file(buffer, as_attachment=True, attachment_filename='images.zip')
     else:
-        return jsonify({'message': 'Invalid URL!'}), 400
+        return jsonify({'message': 'No images provided!'}), 400
+
+# ... (previous code)
+
 
 if __name__ == '__main__':
     app.run()
